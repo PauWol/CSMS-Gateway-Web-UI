@@ -1,43 +1,84 @@
-# Svelte + Vite
+# CSMS Frontend
 
-This template should help get you started developing with Svelte in Vite.
+Frontend interface for the **Coop Security & Monitoring System (CSMS)** - a comprehensive poultry security and monitoring solution.
 
-## Recommended IDE Setup
+This is a Svelte-based single-page application that provides real-time monitoring and control of your coop's security infrastructure. It communicates with the FastAPI backend running on a Raspberry Pi gateway.
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+## Related Repository
 
-## Need an official Svelte framework?
+**Backend/Gateway API:** https://github.com/PauWol/CSMS-Gateway-API
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+The backend serves this frontend and handles communication with the ESP32 gateway and distributed security nodes via ESP-NOW mesh network.
 
-## Technical considerations
+## Features
 
-**Why use this over SvelteKit?**
+- **Real-time Monitoring**: Check device liveness, status, and sensor data
+- **Threat Assessment**: View threat scores and security alerts
+- **Sensor Data Visualization**: Access temperature, humidity, and other sensor readings
+- **Configuration Management**: Update device settings and wake cycles
+- **Data Export**: Retrieve and convert binary logs to CSV or JSON formats
+- **Responsive UI**: Works on desktop and mobile devices
+- **Interactive Guided Tour**: Onboard new users with system features
 
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
+## Tech Stack
 
-This template contains as little as possible to get started with Vite + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
+- **Svelte 5** - Reactive frontend framework
+- **Vite** - Build tool and dev server
+- **Tailwind CSS 4** - Utility-first styling
+- **Flowbite Svelte** - Component library
+- **REST API** - Communication with FastAPI backend
 
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
+## Prerequisites
 
-**Why include `.vscode/extensions.json`?**
+- Node.js 18+ and npm/pnpm
+- Access to CSMS Gateway API backend (see [related repository](https://github.com/PauWol/CSMS-Gateway-API))
 
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
+## Installation
 
-**Why enable `checkJs` in the JS template?**
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   pnpm install
+   ```
 
-It is likely that most cases of changing variable types in runtime are likely to be accidental, rather than deliberate. This provides advanced typechecking out of the box. Should you like to take advantage of the dynamically-typed nature of JavaScript, it is trivial to change the configuration.
+## Development
 
-**Why is HMR not preserving my local component state?**
+Start the development server:
 
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/sveltejs/svelte-hmr/tree/master/packages/svelte-hmr#preservation-of-local-state).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```js
-// store.js
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+```bash
+npm run dev
 ```
+
+The app will be available at `http://localhost:5173` by default. The frontend automatically uses dynamic API URLs to communicate with the backend, ensuring compatibility across local network configurations.
+
+## Building
+
+Build for production:
+
+```bash
+npm run build
+```
+
+The build output is generated in the `dist` directory.
+
+## Deployment
+
+This frontend is automatically served by the CSMS Gateway API backend. Build the frontend and follow the deployment instructions in the [backend repository](https://github.com/PauWol/CSMS-Gateway-API).
+
+## Architecture
+
+The frontend communicates with the Gateway API via REST endpoints to:
+- Retrieve real-time status and sensor data
+- Request device logs and historical data
+- Send configuration updates to devices
+- Monitor mesh network health
+
+## Development Setup
+
+**Recommended IDE:** [VS Code](https://code.visualstudio.com/) + [Svelte extension](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode)
+
+## License
+
+Licensed under AGPL-3.0-or-later © 2026 PauWol
