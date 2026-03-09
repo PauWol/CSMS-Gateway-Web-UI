@@ -1,7 +1,7 @@
 import type { Status, Sensor, PingResponse } from "./types";
 
 // Use the current hostname/IP from the browser's location
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || (window.location.protocol === 'https:' ? 443 : 8000)}/api/`
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || (window.location.protocol === 'https:' ? 443 : 8000)}/api`
 
 const API_ENDPOINTS = {
   status: `${API_BASE}/status`,
