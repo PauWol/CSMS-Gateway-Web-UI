@@ -2,15 +2,16 @@
   import { Card, Badge, Progressbar } from "flowbite-svelte";
   import { ClockOutline } from "flowbite-svelte-icons";
 
-  export let status;
+  export let nextWake;
+  export let sleepInterval;
 
   const now = Date.now();
-  const nextWake = new Date(status.nextWake).getTime();
-  const total = status.sleepInterval;
+  const nW = new Date(nextWake).getTime();
+  const total = sleepInterval;
   const remaining = Math.max(nextWake - now, 0);
   const percent = Math.round(100 - (remaining / total) * 100);
   const remainingSecs = Math.floor(remaining / 1000);
-  const wakeTime = new Date(status.nextWake).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const wakeTime = new Date(nW).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 </script>
 
 <Card id="wake-cycle-card" class="border border-gray-200 dark:border-gray-700 p-4 sm:p-6 md:p-8">

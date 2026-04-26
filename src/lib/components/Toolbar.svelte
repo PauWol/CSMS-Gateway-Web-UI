@@ -1,19 +1,47 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import { Toolbar, ToolbarButton, ToolbarGroup, DarkMode, Tooltip } from "flowbite-svelte";
   import { FileChartBarOutline, ShieldCheckOutline } from "flowbite-svelte-icons";
   import LogRequestModal from "./LogRequestModal.svelte";
 
-  export let pingStatus: "ok" | "error" | "unconnected" = "ok";
+  export let pingStatus: "idle" | "ok" | "error" | "unconnected" = "idle";
+  export let lastPingAttempt: Date | null = null;
 
   let open = false;
+  let now = new Date();
+  let clockInterval: ReturnType<typeof setInterval>;
+
+  onMount(() => {
+    // Tick every second so the "X ago" label stays fresh
+    clockInterval = setInterval(() => { now = new Date(); }, 1000);
+  });
+  onDestroy(() => clearInterval(clockInterval));
+
+  // `_now` is passed explicitly so Svelte sees it as a reactive dependency
+  // and re-runs this every second when `now` ticks via the interval above.
+  function timeAgo(date: Date | null, _now: Date): string {
+    if (!date) return "never";
+    const seconds = Math.floor((_now.getTime() - date.getTime()) / 1000);
+    if (seconds < 5)  return "just now";
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    return `${Math.floor(minutes / 60)}h ago`;
+  }
 
   $: dotColor =
-    pingStatus === "ok"      ? "bg-green-500" :
-    pingStatus === "unconnected" ? "bg-yellow-400" : "bg-red-500";
+    pingStatus === "ok"          ? "bg-green-500" :
+    pingStatus === "unconnected" ? "bg-yellow-400" :
+    pingStatus === "idle"        ? "bg-gray-400"   : "bg-red-500";
 
   $: dotLabel =
-    pingStatus === "ok"      ? "ESP32 Online" :
-    pingStatus === "unconnected" ? "ESP32 Unreachable" : "ESP32 Error";
+    pingStatus === "ok"          ? "Node Online"     :
+    pingStatus === "unconnected" ? "Node Silent"     :
+    pingStatus === "idle"        ? "Polling…"        : "Node Error";
+
+  // now is referenced here directly — Svelte will re-run this reactive
+  // statement every second when the interval updates `now`
+  $: lastPolledText = timeAgo(lastPingAttempt, now);
 </script>
 
 <Toolbar
@@ -36,7 +64,7 @@
   {#snippet end()}
     <div class="flex items-center gap-1">
 
-      <!-- Live ping indicator -->
+      <!-- Live ping indicator + last-polled timestamp -->
       <div class="flex items-center gap-1.5 px-2">
         <span class="relative flex h-2 w-2">
           {#if pingStatus === "ok"}
@@ -45,8 +73,12 @@
           <span class="relative inline-flex h-2 w-2 rounded-full {dotColor}"></span>
         </span>
         <span class="hidden text-xs text-gray-500 dark:text-gray-400 sm:block">{dotLabel}</span>
+        <span class="hidden text-xs text-gray-400 dark:text-gray-500 sm:block">·</span>
+        <span class="hidden text-xs text-gray-400 dark:text-gray-500 sm:block">
+          Polled {lastPolledText}
+        </span>
       </div>
-      <Tooltip>{dotLabel}</Tooltip>
+      <Tooltip>{dotLabel} — last polled {lastPolledText}</Tooltip>
 
       <ToolbarButton
         id="log-request-button"

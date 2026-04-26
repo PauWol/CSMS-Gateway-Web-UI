@@ -2,8 +2,8 @@
   import { Card, Badge, Progressbar } from "flowbite-svelte";
   import { ShieldCheckSolid } from "flowbite-svelte-icons";
 
-  export let status;
-  const score = status.threatScore;
+  export let threatScore;
+  const score = threatScore;
 
   function getColor(score) {
     if (score < 30) return "green";
