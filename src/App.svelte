@@ -11,7 +11,12 @@
   import LoaderPage from "./lib/components/LoaderPage.svelte";
   import { tourSteps, handleTourComplete, handleTourSkip, hasCompletedTour } from "./lib/tour.js";
 
-  let status: Status | null = null;
+  let status: Status | null = {
+  nextWake: 0,
+  sleepInterval: 0,
+  lastSync: 0,
+  threatScore: 0,
+};
   let sensors: Sensor[] = [];
   let lastSync = 0;
   let pingStatus: "ok" | "error" | "unconnected" = "ok";
@@ -32,26 +37,34 @@
   }
 
   async function loadData() {
+  try {
     status = await getStatus();
     ({ lastSync, sensors } = await getSensors());
-    page.loading = false;
+  } catch (err) {
+    console.warn("[loadData] Failed to fetch data:", err);
+    // non-fatal — show dashboard with stale/empty data
+  } finally {
+    page.loading = false;  // ← always unblock the loader
   }
+}
 
   async function pollPing() {
-    try {
-      const res = await ping();
-      pingStatus = toConnectionStatus(res.status);
-    } catch {
-      pingStatus = toConnectionStatus("error");
-    }
+  try {
+    const res = await ping();
+    pingStatus = toConnectionStatus(res.status);
+    if (pingStatus === "ok") await loadData(); // ← refresh when node wakes
+  } catch {
+    pingStatus = "error";
   }
+}
 
   async function checkConnection() {
     page.state = "checking";
     page.errorMessage = "";
     page.error = null;
+    clearInterval(pingInterval);  // ← clear any existing poll before retrying
 
-    // ── Stage 1: UART (physical layer) ────────────────────────────────────
+    //Stage 1: UART ping
     try {
       const uartRes = await uart_ping();
       if (uartRes.status !== "ok") {
@@ -63,26 +76,32 @@
         return;
       }
     } catch {
-      page.state = toConnectionStatus("error");
+      page.state = "error";
       page.errorMessage = "Could not reach UART interface";
       return;
     }
 
-    // ── Stage 2: ESP ping (application layer) ─────────────────────────────
+    // Stage 2: ESP ping 
     try {
       const res = await ping();
       pingStatus = toConnectionStatus(res.status);
-      page.state = "ok";
-      await loadData();
-      checkTour();
-
-      // start polling ping every 30 s once we're on the dashboard
-      pingInterval = setInterval(pollPing, 30_000);
-    } catch (err) {
-      page.state = "error";
-      page.errorMessage = "Gateway node not responding — ESP32 may be offline";
-      pingStatus = toConnectionStatus("error");
+      // don't block on unconnected — ESP32 may just be in a sleep cycle
+    } catch {
+      pingStatus = "error";
+      // still continue to dashboard — the status banner will show the warning
     }
+    page.loading = false;
+    page.state = "ok";
+    if (pingStatus !== "ok") {
+      // if ESP32 isn't reachable, we can still show the dashboard with stale data
+      console.warn("[checkConnection] ESP32 ping failed during connection check");
+    } else {
+      console.log("[checkConnection] Connection successful");
+      await loadData();
+    }
+
+    checkTour();
+    pingInterval = setInterval(pollPing, 30_000);
   }
 
   onMount(() => checkConnection());
@@ -106,16 +125,18 @@
           <span class="h-2 w-2 animate-pulse rounded-full bg-green-500"></span>
           <span class="text-sm font-medium text-green-700 dark:text-green-400">System Online</span>
         </div>
+      {:else if pingStatus === "unconnected"}
+        <div class="mb-6 flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2.5 dark:border-yellow-800 dark:bg-yellow-950/40">
+          <span class="h-2 w-2 animate-pulse rounded-full bg-yellow-400"></span>
+          <span class="text-sm font-medium text-yellow-700 dark:text-yellow-400">
+            Security node is sleeping — will reconnect automatically
+          </span>
+        </div>
       {:else}
         <div class="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 dark:border-red-800 dark:bg-red-950/40">
           <span class="h-2 w-2 rounded-full bg-red-500"></span>
-          <span class="text-sm font-medium text-red-700 dark:text-red-400">
-            {pingStatus === "unconnected" ? "Gateway Unreachable" : "Connection Error"}
-          </span>
-          <button
-            onclick={pollPing}
-            class="ml-auto text-xs text-red-500 underline hover:text-red-700"
-          >Retry</button>
+          <span class="text-sm font-medium text-red-700 dark:text-red-400">Security node unreachable</span>
+          <button onclick={pollPing} class="ml-auto text-xs text-red-500 underline hover:text-red-700">Retry</button>
         </div>
       {/if}
 
