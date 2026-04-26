@@ -1,4 +1,7 @@
 
+export type ConnectionStatus = "ok" | "error" | "unconnected";
+
+
 export type Status = {
   nextWake: number;
   sleepInterval: number;
@@ -20,5 +23,10 @@ export type PageStatus = {
 }
 
 export type PingResponse = {
-  status: string;
+  status: ConnectionStatus;
 };
+
+export function toConnectionStatus(s: string): ConnectionStatus {
+  if (s === "ok" || s === "error" || s === "unconnected") return s;
+  return "error"; // unknown value → treat as error
+}

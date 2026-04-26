@@ -1,9 +1,19 @@
 <script lang="ts">
-  import { Toolbar, ToolbarButton, ToolbarGroup, DarkMode, Tooltip, Badge } from "flowbite-svelte";
+  import { Toolbar, ToolbarButton, ToolbarGroup, DarkMode, Tooltip } from "flowbite-svelte";
   import { FileChartBarOutline, ShieldCheckOutline } from "flowbite-svelte-icons";
   import LogRequestModal from "./LogRequestModal.svelte";
 
+  export let pingStatus: "ok" | "error" | "unconnected" = "ok";
+
   let open = false;
+
+  $: dotColor =
+    pingStatus === "ok"      ? "bg-green-500" :
+    pingStatus === "unconnected" ? "bg-yellow-400" : "bg-red-500";
+
+  $: dotLabel =
+    pingStatus === "ok"      ? "ESP32 Online" :
+    pingStatus === "unconnected" ? "ESP32 Unreachable" : "ESP32 Error";
 </script>
 
 <Toolbar
@@ -25,6 +35,19 @@
 
   {#snippet end()}
     <div class="flex items-center gap-1">
+
+      <!-- Live ping indicator -->
+      <div class="flex items-center gap-1.5 px-2">
+        <span class="relative flex h-2 w-2">
+          {#if pingStatus === "ok"}
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+          {/if}
+          <span class="relative inline-flex h-2 w-2 rounded-full {dotColor}"></span>
+        </span>
+        <span class="hidden text-xs text-gray-500 dark:text-gray-400 sm:block">{dotLabel}</span>
+      </div>
+      <Tooltip>{dotLabel}</Tooltip>
+
       <ToolbarButton
         id="log-request-button"
         onclick={() => (open = true)}

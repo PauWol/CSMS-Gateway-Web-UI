@@ -8,12 +8,22 @@ const API_BASE = '/api';
 const API_ENDPOINTS = {
   status: `${API_BASE}/status`,
   sensors: `${API_BASE}/sensors`,
-  ping: `${API_BASE}/ping`
+  ping: `${API_BASE}/ping`,
+  uart_ping: `${API_BASE}/uart-ping`
 };
 
 
 
 // TODO: Uncomment this section to use real API calls instead of mock data
+
+export async function uart_ping(): Promise<PingResponse> {
+  const response = await fetch(API_ENDPOINTS.uart_ping);
+  if (!response.ok) {
+    throw new Error("UART Ping failed");
+  }
+  return response.json();
+}
+
 
 export async function getStatus(): Promise<Status> {
   const response = await fetch(API_ENDPOINTS.status);

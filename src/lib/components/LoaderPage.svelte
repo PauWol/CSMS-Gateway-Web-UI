@@ -2,15 +2,19 @@
   import { Spinner, Button } from "flowbite-svelte";
   import { ShieldCheckOutline, ExclamationCircleOutline } from "flowbite-svelte-icons";
 
-  export let state = "checking"; // checking | connected | error
+  export let state = "checking";
   export let errorMessage = "";
   export let checkConnection;
+
+  // Derive a subtitle so the user knows which stage is running
+  $: subtitle =
+    state === "checking"    ? "Checking UART link…" :
+    state === "ok"          ? "Loading dashboard…"  :
+    state === "unconnected" ? "Device unreachable"  : "Connection failed";
 </script>
 
 <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
   <div class="w-full max-w-sm space-y-6 text-center">
-
-    <!-- Logo mark -->
     <div class="flex justify-center">
       <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-600 shadow-lg dark:bg-primary-500">
         <ShieldCheckOutline class="h-8 w-8 text-white" />
@@ -19,10 +23,9 @@
 
     <div>
       <h1 class="text-xl font-bold text-gray-900 dark:text-white">CSMS</h1>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Connecting to Gateway Node…</p>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>
     </div>
 
-    <!-- States -->
     {#if state === "checking"}
       <div class="flex flex-col items-center gap-3">
         <Spinner size="8" color="blue" />
@@ -34,34 +37,29 @@
         <div class="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40">
           <ShieldCheckOutline class="h-5 w-5 text-green-600 dark:text-green-400" />
         </div>
-        <div>
-          <p class="font-semibold text-green-600 dark:text-green-400">Connected</p>
-          <p class="mt-0.5 text-sm text-gray-400">Loading dashboard…</p>
-        </div>
+        <p class="font-semibold text-green-600 dark:text-green-400">Connected</p>
       </div>
 
-    {:else if state === "error"}
+    {:else}
+      <!-- covers "error" and "unconnected" -->
       <div class="space-y-4">
         <div class="flex flex-col items-center gap-3">
           <div class="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/40">
             <ExclamationCircleOutline class="h-5 w-5 text-red-600 dark:text-red-400" />
           </div>
           <div>
-            <p class="font-semibold text-red-600 dark:text-red-400">Connection Failed</p>
+            <p class="font-semibold text-red-600 dark:text-red-400">
+              {state === "unconnected" ? "Device Unreachable" : "Connection Failed"}
+            </p>
             {#if errorMessage}
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{errorMessage}</p>
             {/if}
           </div>
         </div>
-        <Button
-          onclick={checkConnection}
-          color="primary"
-          class="w-full"
-        >
+        <Button onclick={checkConnection} color="primary" class="w-full">
           Retry Connection
         </Button>
       </div>
     {/if}
-
   </div>
 </div>
