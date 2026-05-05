@@ -2,10 +2,13 @@ export type ConnectionStatus = "ok" | "error" | "unconnected";
 export const POLL_INTERVAL = 30_000;
 
 export type Status = {
-  nextWake: number;
   sleepInterval: number;
   lastSync: number;
   threatScore: number;
+  threshold: number;
+  phase: "DAY" | "DUSK" | "NIGHT" | "UNKNOWN";
+  volt: number;
+  tte_s: number;
 };
 
 export type Sensor = {
@@ -24,14 +27,16 @@ export type PageStatus = {
 };
 
 export type NodeState = {
-  sensors: Sensor[];
-  nextWake: number;
-  sleepInterval: number;
+  sensors: Sensor[];  nextWake: number;  sleepInterval: number;
   lastSync: number;
   threatScore: number;
-  pingStatus: "idle" | "ok" | "error" | "unconnected"; // "idle" = no poll has run yet
-  pingTime: Date;           // last time node responded with "ok"
-  lastPingAttempt: Date | null; // last time a poll was attempted (regardless of result)
+  threshold: number;
+  phase: "DAY" | "DUSK" | "NIGHT" | "UNKNOWN";
+  volt: number;
+  tte_s: number;
+  pingStatus: "idle" | "ok" | "error" | "unconnected";
+  pingTime: Date;
+  lastPingAttempt: Date | null;
 };
 
 export type PingResponse = {

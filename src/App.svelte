@@ -5,6 +5,7 @@
   import ThreatScoreCard from "./lib/components/ThreatScoreCard.svelte";
   import SensorDataCard from "./lib/components/SensorDataCard.svelte";
   import ConfigUpdateCard from "./lib/components/ConfigUpdateCard.svelte";
+  import BatteryCard from "./lib/components/BatteryCard.svelte";
   import { getStatus, getSensors, ping, uart_ping } from "./lib/api";
   import { type PageStatus, toConnectionStatus, type NodeState, POLL_INTERVAL } from "./lib/types";
   import Toolbar from "./lib/components/Toolbar.svelte";
@@ -17,12 +18,16 @@
     sleepInterval: 0,
     lastSync: 0,
     threatScore: 0,
-    pingStatus: "idle",       // no poll has run yet
+    pingStatus: "idle",
     pingTime: new Date(0),
     lastPingAttempt: null,
+    threshold: 0,
+    phase: "UNKNOWN",
+    volt: 0,
+    tte_s: 0
   };
 
-  let pingInterval: ReturnType<typeof setInterval>;
+  let pollInterval: ReturnType<typeof setInterval>;
 
   let page: PageStatus = {
     loading: true,
@@ -37,9 +42,9 @@
     if (!hasCompletedTour()) page.tourActive = true;
   }
 
-  // Checks the UART bridge. On success, starts the node polling loop.
+  // Checks the UART bridge. On success, starts the data polling loop.
   async function checkUART() {
-    page.uart_gateway = null; // reset to "checking" while retrying
+    page.uart_gateway = null;
     try {
       const res = await uart_ping();
       page.uart_gateway = toConnectionStatus(res.status);
@@ -50,71 +55,69 @@
     }
 
     if (page.uart_gateway === "ok") {
-      // Start polling immediately so the dashboard isn't blank for 30 s
-      clearInterval(pingInterval);
-      pollPing();
-      pingInterval = setInterval(pollPing, POLL_INTERVAL);
+      clearInterval(pollInterval);
+      pollData();
+      pollInterval = setInterval(pollData, POLL_INTERVAL);
     }
   }
 
   async function reqSensors() {
-    const res = await getSensors();
-    // Full reassignment — property mutation inside async callbacks
-    // is unreliable in Svelte 4; this guarantees reactivity fires
-    security_node = { ...security_node, sensors: res.sensors, lastSync: res.lastSync };
+    const sensors = await getSensors();
+    security_node = { ...security_node, sensors };
   }
 
   async function reqStatus() {
     const res = await getStatus();
-    security_node = { ...security_node, threatScore: res.threatScore };
+    console.log(res)
+    security_node = {
+      ...security_node,
+      sleepInterval: res.sleepInterval,          // ms, from ESP32 FLAG_SLEEP
+      lastSync: res.lastSync,                    // Unix seconds, from Pi time.time()
+      threatScore: res.threatScore,
+      threshold: res.threshold,
+      phase: res.phase,
+      volt: res.volt,
+      tte_s: res.tte_s,
+      // lastSync (s) → ms; sleepInterval already in ms
+      nextWake: res.lastSync * 1000 + res.sleepInterval,
+    };
   }
 
-  async function pollPing() {
-    // Stamp attempt time before anything can fail
+  // ── Main poll loop ─────────────────────────────────────────────────────────
+  // Status and sensor data are always fetched — the Pi caches the last received
+  // binary frame from the ESP32, so these endpoints return valid data even when
+  // the security node is currently sleeping.  The mesh ping is a separate check
+  // that only updates the reachability indicator.
+  async function pollData() {
     security_node = { ...security_node, lastPingAttempt: new Date() };
     page.errorMessage = "";
 
-    // --- Stage 1: ping the remote node ---
-    let pingRes;
-    try {
-      pingRes = await ping();
-    } catch (err: any) {
-      // HTTP-level failure — fetch itself threw (network error, server down, etc.)
-      security_node = { ...security_node, pingStatus: "error" };
-      page.errorMessage = err?.message ?? "Ping request failed";
-      return;
-    }
-
-    const newPingStatus = toConnectionStatus(pingRes.status);
-
-    if (newPingStatus === "error") {
-      // API returned 200 but body says "error" — bridge reported a problem
-      security_node = { ...security_node, pingStatus: "error" };
-      page.errorMessage = "Bridge reported an error reaching the security node";
-      return;
-    }
-
-    if (newPingStatus === "unconnected") {
-      // Node didn't respond — silent, out of range, or between wake cycles
-      security_node = { ...security_node, pingStatus: "unconnected" };
-      return;
-    }
-
-    // Node is alive — stamp the successful response time
-    security_node = { ...security_node, pingStatus: "ok", pingTime: new Date() };
-
-    // --- Stage 2: fetch status (non-fatal if it fails) ---
+    // --- Stage 1: fetch cached status from the Pi (always) ---
     try {
       await reqStatus();
     } catch (err: any) {
       page.errorMessage = err?.message ?? "Failed to fetch node status";
     }
 
-    // --- Stage 3: fetch sensors (non-fatal if it fails) ---
+    // --- Stage 2: fetch cached sensors from the Pi (always) ---
     try {
       await reqSensors();
     } catch (err: any) {
       page.errorMessage = err?.message ?? "Failed to fetch sensor data";
+    }
+
+    // --- Stage 3: ping the security node to update reachability indicator ---
+    try {
+      const pingRes = await ping();
+      const newPingStatus = toConnectionStatus(pingRes.status);
+      security_node = {
+        ...security_node,
+        pingStatus: newPingStatus,
+        ...(newPingStatus === "ok" ? { pingTime: new Date() } : {}),
+      };
+    } catch (err: any) {
+      security_node = { ...security_node, pingStatus: "error" };
+      page.errorMessage = err?.message ?? "Ping request failed";
     }
   }
 
@@ -125,10 +128,10 @@
     checkTour();
   });
 
-  onDestroy(() => clearInterval(pingInterval));
+  onDestroy(() => clearInterval(pollInterval));
 </script>
 
-<!-- Show LoaderPage while UART is being checked, or if it failed -->
+<!-- LoaderPage covers initial check and any UART failure -->
 {#if page.loading || page.uart_gateway !== "ok"}
   <LoaderPage
     state={page.uart_gateway}
@@ -141,57 +144,65 @@
 
     <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
 
-      <!-- Dynamic status banner — 5 distinct states -->
+      <!-- Node status banner — UART is confirmed OK at this point, so this
+           banner is purely about the security node's mesh reachability -->
 
       {#if security_node.pingStatus === "idle"}
-        <!-- No poll has completed yet -->
         <div class="mb-6 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/40">
           <span class="h-2 w-2 animate-pulse rounded-full bg-gray-400"></span>
-          <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Waiting for first node poll…</span>
+          <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Contacting security node…</span>
         </div>
 
-      {:else if security_node.pingStatus === "ok" && security_node.sensors.length > 0}
-        <!-- Node online and sending data -->
+      {:else if security_node.pingStatus === "ok"}
         <div class="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 dark:border-green-800 dark:bg-green-950/40">
-          <span class="h-2 w-2 animate-pulse rounded-full bg-green-500"></span>
-          <span class="text-sm font-medium text-green-700 dark:text-green-400">System Online</span>
-          <span class="ml-auto text-xs text-green-600 dark:text-green-500">
-            Last fetch: {new Date(security_node.lastSync).toLocaleTimeString()}
+          <span class="relative flex h-2 w-2 shrink-0">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+            <span class="relative inline-flex h-2 w-2 rounded-full bg-green-500"></span>
           </span>
-        </div>
-
-      {:else if security_node.pingStatus === "ok" && security_node.sensors.length === 0}
-        <!-- Node responded but sent no sensor data this cycle -->
-        <div class="mb-6 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 dark:border-blue-800 dark:bg-blue-950/40">
-          <span class="h-2 w-2 animate-pulse rounded-full bg-blue-400"></span>
-          <span class="text-sm font-medium text-blue-700 dark:text-blue-400">
-            Node online — no sensor data reported this cycle
+          <span class="text-sm font-medium text-green-700 dark:text-green-400">
+            Node Online
+            {#if security_node.phase !== "UNKNOWN"}
+              <span class="ml-1 font-normal opacity-70">({security_node.phase})</span>
+            {/if}
           </span>
+          {#if security_node.lastSync > 0}
+            <span class="ml-auto text-xs text-green-600 dark:text-green-500">
+              Last data: {new Date(security_node.lastSync * 1000).toLocaleTimeString()}
+            </span>
+          {/if}
         </div>
 
       {:else if security_node.pingStatus === "unconnected"}
-        <!-- Node silent — not responding to ping, likely between wake cycles -->
+        <!-- Node not responding — most likely in its deep-sleep interval, which is normal -->
         <div class="mb-6 flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2.5 dark:border-yellow-800 dark:bg-yellow-950/40">
-          <span class="h-2 w-2 animate-pulse rounded-full bg-yellow-400"></span>
+          <span class="h-2 w-2 animate-pulse rounded-full bg-yellow-400 shrink-0"></span>
           <span class="text-sm font-medium text-yellow-700 dark:text-yellow-400">
-            Node not responding — likely sleeping between wake cycles
+            Node not responding — may be sleeping between wake cycles
           </span>
+          {#if security_node.lastSync > 0}
+            <span class="ml-auto shrink-0 text-xs text-yellow-600 dark:text-yellow-500">
+              Last data: {new Date(security_node.lastSync * 1000).toLocaleTimeString()}
+            </span>
+          {/if}
         </div>
 
       {:else}
-        <!-- Error state — something broke in the chain, show the specific message -->
+        <!-- Error — something failed in the mesh link or the Pi-side request -->
         <div class="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 dark:border-red-800 dark:bg-red-950/40">
-          <span class="h-2 w-2 rounded-full bg-red-500"></span>
+          <span class="h-2 w-2 rounded-full bg-red-500 shrink-0"></span>
           <span class="text-sm font-medium text-red-700 dark:text-red-400">
-            {page.errorMessage || "Node unreachable — check the ESP32 bridge link"}
+            {page.errorMessage || "Node unreachable — check the ESP32 mesh link"}
           </span>
-          <button onclick={pollPing} class="ml-auto shrink-0 text-xs text-red-500 underline hover:text-red-700">Retry</button>
+          <button onclick={pollData} class="ml-auto shrink-0 text-xs text-red-500 underline hover:text-red-700">
+            Retry
+          </button>
         </div>
       {/if}
 
       <!-- Primary grid -->
       <div class="grid gap-4 sm:gap-6 md:grid-cols-2">
-        <ThreatScoreCard threatScore={security_node.threatScore} />
+        <ThreatScoreCard threatScore={security_node.threatScore} threshold={security_node.threshold} />
+        <BatteryCard volt={security_node.volt} tte_s={security_node.tte_s} />
         <WakeCycleCard nextWake={security_node.nextWake} sleepInterval={security_node.sleepInterval} />
         <div class="md:col-span-2">
           <SensorDataCard lastSync={security_node.lastSync} sensors={security_node.sensors} />

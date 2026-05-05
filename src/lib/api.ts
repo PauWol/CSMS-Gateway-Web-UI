@@ -33,14 +33,12 @@ export async function getStatus(): Promise<Status> {
   return response.json();
 }
 
-export async function getSensors(): Promise<{ lastSync: number; sensors: Sensor[] }> {
-  const response = await fetch(API_ENDPOINTS.sensors);
+export async function getSensors(): Promise<Sensor[]> {
+   const response = await fetch(API_ENDPOINTS.sensors);
   if (!response.ok) {
     throw new Error("Failed to fetch sensors");
   }
-  let lastSync = Date.now();
-
-  return { lastSync, sensors: await response.json() };
+  return response.json();
 }
 
 export async function ping(): Promise<PingResponse> {

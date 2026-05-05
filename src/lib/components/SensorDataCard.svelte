@@ -23,7 +23,7 @@
     </div>
     {#if hasEverSynced}
       <Badge color="blue" class="rounded-md px-3 py-1 text-xs">
-        Last fetch: {new Date(lastSync).toLocaleTimeString()}
+        Last fetch: {new Date(lastSync * 1000).toLocaleTimeString()}
       </Badge>
     {:else}
       <Badge color="gray" class="rounded-md px-3 py-1 text-xs">No data yet</Badge>

@@ -3,22 +3,27 @@
   import { ShieldCheckSolid } from "flowbite-svelte-icons";
 
   export let threatScore;
-  const score = threatScore;
+  export let threshold;
+  $: score = Number(threatScore);
+  $: scoreFixed = score.toFixed(2)
+  $: progressScore = Math.min(100, Math.round((score / threshold) * 100));
 
-  function getColor(score) {
-    if (score < 30) return "green";
-    if (score < 70) return "yellow";
+  function getColor(score, threshold) {
+    if (score >= threshold) return "red";
+    if (score < threshold *0.5) return "green";
+    if (score < threshold * 0.75) return "yellow";
     return "red";
   }
 
-  function getLabel(score) {
-    if (score < 30) return "Low Risk";
-    if (score < 70) return "Moderate";
+  function getLabel(score, threshold) {
+    if (score >= threshold) return "Critical";
+    if (score < threshold *0.5) return "Low Risk";
+    if (score < threshold *0.75) return "Moderate";
     return "High Risk";
   }
 
-  const color = getColor(score);
-  const label = getLabel(score);
+  $: color = getColor(score, threshold);
+  $: label = getLabel(score, threshold);
 </script>
 
 <Card id="threat-score-card" class="border border-gray-200 dark:border-gray-700 p-4 sm:p-6 md:p-8">
@@ -28,7 +33,7 @@
         Threat Assessment
       </p>
       <p class="mt-1 text-4xl font-black tabular-nums text-gray-900 dark:text-white">
-        {score}<span class="text-xl font-medium text-gray-400">/100</span>
+        {scoreFixed}<span class="text-xl font-medium text-gray-400">/{threshold}</span>
       </p>
     </div>
     <div class="rounded-xl p-2.5
@@ -48,7 +53,7 @@
       <span class="font-medium">{label}</span>
     </div>
     <Progressbar
-      progress={score}
+      progress={progressScore}
       {color}
       size="h-2.5"
       class="rounded-full"
@@ -57,7 +62,7 @@
 
   <div class="mt-4">
     <Badge color={color} class="rounded-md px-3 py-1 text-xs font-semibold">
-      {label} — Score {score}
+      {label} — Score {scoreFixed}
     </Badge>
   </div>
 </Card>
